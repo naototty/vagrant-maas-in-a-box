@@ -51,6 +51,15 @@ Vagrant.configure("2") do |config|
     end
     maas.vm.provision "ansible" do |ansible|
       ansible.playbook = "deploy/maas.yml"
+      # ansible.inventory_path = "deploy/hosts"
+      # ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
+      if Vagrant::Util::Platform::cygwin?
+        ansible.raw_arguments = ["--inventory-file=.vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"]
+      end
+      #if File.file?(".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory")
+      #  ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
+      #end
+      #ansible.limit = 'all'
     end
   end
 
@@ -69,7 +78,17 @@ Vagrant.configure("2") do |config|
         vbox.customize ["modifyvm", :id, "--boot2", "disk"]
       end
       vm_conf.vm.provision "ansible" do |ansible|
+        ansible.verbose = "vv"
         ansible.playbook = "deploy/nodes.yml"
+        # ansible.inventory_path = "deploy/hosts"
+        # ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
+        if Vagrant::Util::Platform::cygwin?
+          ansible.raw_arguments = ["--inventory-file=.vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"]
+        end
+        #if File.file?(".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory")
+        #  ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
+        #end
+        #ansible.limit = 'all'
       end
     end
   end

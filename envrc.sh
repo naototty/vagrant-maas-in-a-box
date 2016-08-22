@@ -1,0 +1,4 @@
+
+MAAS_NUM_NODES=2
+export MAAS_NUM_NODES
+

@@ -1,0 +1,44 @@
+---
+- hosts: os-ironic
+  user: vagrant
+  sudo: True
+  tasks:
+## for centos7 image
+#    - name: yum Install base packages and other usefulness
+#      yum: pkg={{item}} state=installed update_cache=yes
+#      with_items:
+#        - epel-release
+#        - centos-release-openstack-newton
+    - name: Install base packages and other usefulness
+      action: apt pkg={{item}} state=installed update_cache=yes
+      with_items:
+        - language-pack-en-base
+        - python-apt
+        - python-pycurl
+        - ubuntu-cloud-keyring
+        - dnsutils
+    - name: git clone stable/newton
+      git:
+        repo: https://github.com/openstack/openstack-ansible.git
+        dest: /opt/openstack-ansible
+        version: stable/newton
+    - name: more git checkout
+      shell: git checkout stable/newton
+      args:
+        chdir: /opt/openstack-ansible/
+    - name: bootstrap-ansible
+      shell: sudo ./scripts/bootstrap-ansible.sh
+      args:
+        chdir: /opt/openstack-ansible/
+    - name: bootstrap-aio
+      shell: sudo ./scripts/bootstrap-aio.sh
+      args:
+        chdir: /opt/openstack-ansible/
+    - name: copy config
+      shell: "cp -avf etc/openstack_deploy/conf.d/{ironic,aodh,gnocchi,ceilometer}.yml.aio /etc/openstack_deploy/conf.d/"
+      args:
+        chdir: /opt/openstack-ansible/
+    - name: rename .yml.aio to .yml config
+      shell: "for f in $(ls -1 /etc/openstack_deploy/conf.d/*.aio); do mv -v ${f} ${f%.*}; done"
+      
+

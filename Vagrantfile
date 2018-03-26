@@ -7,16 +7,18 @@
 # Recommended to have at least 6G RAM with roughly 2G free disk space
 
 DEPLOY_MAAS = 0
-DEPLOY_IRONIC = 0
+deploy_IRONIC = 0
 
 if DEPLOY_MAAS == 0
-  DEPLOY_IRONIC = 1
+  deploy_IRONIC = 1
 end
 
 # MAAS Properties
-MAAS_MEM = '1024'
-if DEPLOY_IRONIC == 1
-  MAAS_MEM = '8192'
+if DEPLOY_MAAS == 1
+  MAAS_MEM = '1024'
+elsif DEPLOY_MAAS == 0
+  ## MAAS_MEM = '8192'
+  MAAS_MEM = '4096'
 end
 # Node Properties
 NODE_MEM = '512'
@@ -24,7 +26,8 @@ NODE_MEM = '512'
 if num_nodes_str = ENV['MAAS_NUM_NODES']
   num_nodes = num_nodes_str.to_i + 1
 else
-  num_nodes = 10
+  ## num_nodes = 10
+  num_nodes = 2
 end
 
 if ENV['MAAS_NODE_GUI']
@@ -34,9 +37,13 @@ else
   gui_mode = false
 end
 
+VAGRANT_DISABLE_VBOXSYMLINKCREATE=1
+
 # IP's range at 192.168.50.[101:1xx] - gives you 99 nodes plus 1 maas instance
 # Keep this in mind when configuring your cluster controller's min/max ip ranges
 BOXES = { maas: { ip: "192.168.50.99" } }
+# 初期値として、BOXES (hash) を定義しているけど、次のhashで上書きしている?
+# ==> 単に"maas" という名称が使われているので、skip しているだけかも
 (1..num_nodes).each do |i|
   if i < 10
     gen_ip = "192.168.50.10#{i}"
@@ -46,8 +53,23 @@ BOXES = { maas: { ip: "192.168.50.99" } }
   BOXES["node#{i}".to_sym] = { ip: gen_ip }
 end
 
+$do_01_yum_script = <<SCRIPT_AA
+echo I am provisioning...
+    sudo yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+    sudo yum -y install ansible
+    cd /vagrant/provision; sudo ansible-playbook -i localhost vagrant.yml
+SCRIPT_AA
+
+$do_02_yum_apt = <<SCRIPT_AB
+echo I am provisioning...
+    sudo yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+    sudo yum -y install ansible
+    cd /vagrant/provision; sudo ansible-playbook -i localhost vagrant.yml
+SCRIPT_AB
+
+
 master_node_host_name = "maascontroller"
-if DEPLOY_IRONIC == 1
+if deploy_IRONIC == 1
   master_node_host_name = "bare-ironic-controller"
 end 
 
@@ -56,12 +78,15 @@ Vagrant.configure("2") do |config|
   config.vm.define "maas", primary: true do |maas|
     ## maas.vm.box = "ubuntu/trusty64"
     maas.vm.box = "ubuntu/xenial64"
+    maas.vm.box_version = "20180322.0.0"
     ## maas.vm.hostname = "maascontroller"
     maas.vm.hostname = master_node_host_name
-    if DEPLOY_IRONIC == 1
+    if deploy_IRONIC == 1
       ## https://app.vagrantup.com/centos/boxes/7/versions/1705.02
-      maas.vm.box = "centos/7"
-      maas.vm.box_version = "1705.02"
+      ## maas.vm.box = "centos/7"
+      ## maas.vm.box_version = "1705.02" 20180322.0.0
+      maas.vm.box = "ubuntu/xenial64"
+      maas.vm.box_version = "20180322.0.0"
       maas.disksize.size = '60GB'
       ## maas.vm.hostname = "bare-ironic-controller"
     end
@@ -73,62 +98,105 @@ Vagrant.configure("2") do |config|
       vbox.name = master_node_host_name
       vbox.customize ["modifyvm", :id, "--memory", "#{MAAS_MEM}"]
     end
-    maas.vm.provision "ansible" do |ansible|
-      ansible.verbose = "vvv"
+    ## OS=Windows_NT
+    if /Windows_NT/ =~ "#{ENV['OS']}"
       if DEPLOY_MAAS == 1
-        ansible.playbook = "deploy/maas.yml"
-        # ansible.inventory_path = "deploy/hosts"
-        # ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
-        if Vagrant::Util::Platform::cygwin?
-          ansible.raw_arguments = ["--inventory-file=.vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"]
+        maas.vm.provision "shell" do |s|
+          s.inline = "ls -l /vagrant/ > /vagrant/log-shell-inline-maas.log"
         end
-        #if File.file?(".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory")
-        #  ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
-        #end
-        #ansible.limit = 'all'
-      elsif DEPLOY_IRONIC == 1
-        ansible.playbook = "deploy/os-ironic.yml"
-        # ansible.inventory_path = "deploy/hosts"
-        # ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
-        if Vagrant::Util::Platform::cygwin?
-          ansible.raw_arguments = ["--inventory-file=.vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"]
+        maas.vm.provision "ansible_local" do |lo_ansible|
+          lo_ansible.verbose = "vvv"
+          lo_ansible.playbook = "deploy/maas.yml"
         end
-        #if File.file?(".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory")
-        #  ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
-        #end
-        #ansible.limit = 'all'
+      elsif DEPLOY_MAAS == 0
+        maas.vm.provision "shell" do |s|
+          s.inline = "ls -l /vagrant/ > /vagrant/log-shell-inline-ironic.log"
+        end
+        maas.vm.provision "ansible_local" do |lo_ansible|
+          lo_ansible.verbose = "vvv"
+          lo_ansible.playbook = "deploy/os-ironic.yml"
+        end
+      end
+    else
+      maas.vm.provision "ansible" do |ansible|
+        ansible.verbose = "vvv"
+        if DEPLOY_MAAS == 1
+          ansible.playbook = "deploy/maas.yml"
+          # ansible.inventory_path = "deploy/hosts"
+          # ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
+          if Vagrant::Util::Platform::cygwin?
+            ansible.raw_arguments = ["--inventory-file=.vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"]
+          end
+          #if File.file?(".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory")
+          #  ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
+          #end
+          #ansible.limit = 'all'
+        elsif DEPLOY_MAAS == 0
+          ansible.playbook = "deploy/os-ironic.yml"
+          # ansible.inventory_path = "deploy/hosts"
+          # ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
+          if Vagrant::Util::Platform::cygwin?
+            ansible.raw_arguments = ["--inventory-file=.vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"]
+          end
+          #if File.file?(".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory")
+          #  ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
+          #end
+          #ansible.limit = 'all'
+        end
       end
     end
+    ## end config
   end
 
   # Define our nodes
   BOXES.each do |node_name, node_config|
     config.vm.define(node_name.to_sym) do |vm_conf|
-      ## vm_conf.vm.box = "ubuntu/trusty64"
-      vm_conf.vm.box = "ubuntu/xenial64"
-      vm_conf.vm.hostname = "#{node_name}"
-      vm_conf.vm.network :private_network, ip: node_config[:ip]
-      vm_conf.vm.provider "virtualbox" do |vbox|
-        vbox.gui = gui_mode
-        vbox.name = "#{node_name}"
-        vbox.customize ["modifyvm", :id, "--memory", "#{NODE_MEM}"]
-        vbox.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
-        vbox.customize ["modifyvm", :id, "--boot1", "net"]
-        vbox.customize ["modifyvm", :id, "--boot2", "disk"]
-      end
-      vm_conf.vm.provision "ansible" do |ansible|
-        ansible.verbose = "vvv"
-        ansible.playbook = "deploy/nodes.yml"
-        # ansible.inventory_path = "deploy/hosts"
-        # ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
-        if Vagrant::Util::Platform::cygwin?
-          ansible.raw_arguments = ["--inventory-file=.vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"]
+      if "#{NODE_MEM}" != "maas"
+        ## vm_conf.vm.box = "ubuntu/trusty64"
+        vm_conf.vm.box = "ubuntu/xenial64"
+        vm_conf.vm.box_version = "20180322.0.0"
+        vm_conf.vm.hostname = "#{node_name}"
+        vm_conf.vm.network :private_network, ip: node_config[:ip]
+        vm_conf.vm.provider "virtualbox" do |vbox|
+          vbox.gui = gui_mode
+          vbox.name = "#{node_name}"
+          vbox.customize ["modifyvm", :id, "--memory", "#{NODE_MEM}"]
+          vbox.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
+          vbox.customize ["modifyvm", :id, "--boot1", "net"]
+          vbox.customize ["modifyvm", :id, "--boot2", "disk"]
         end
-        #if File.file?(".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory")
-        #  ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
-        #end
-        #ansible.limit = 'all'
+        ## OS=Windows_NT
+        if /Windows_NT/ =~ "#{ENV['OS']}"
+          vm_conf.vm.provision "shell" do |s|
+            s.inline = "ls -l /vagrant/ > /vagrant/log-shell-inline-nodes.log"
+          end
+          vm_conf.vm.provision "ansible_local" do |lo_ansible|
+            lo_ansible.verbose = "vvv"
+            lo_ansible.playbook = "deploy/nodes.yml"
+          end
+        else
+          vm_conf.vm.provision "ansible" do |ansible|
+            ansible.verbose = "vvv"
+            ansible.playbook = "deploy/nodes.yml"
+            # ansible.inventory_path = "deploy/hosts"
+            # ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
+            if Vagrant::Util::Platform::cygwin?
+              ansible.raw_arguments = ["--inventory-file=.vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"]
+            end
+            #if File.file?(".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory")
+            #  ansible.inventory_path = ".vagrant/provisioners/ansible/inventory/vagrant_ansible_inventory"
+            #end
+            #ansible.limit = 'all'
+          end
+        end
+        ## end if OS=Windows_NT else
       end
+      ## end if "#{NODE_MEM}" != "maas"
     end
+    ## end config
   end
+  ## end BOXES.each do
 end
+## end Vagrant.configure("2") do |config|
+
+

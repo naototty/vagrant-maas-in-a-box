@@ -14,5 +14,16 @@
         - maas-cli
     - name: Update system
       apt: upgrade=dist
+
+## vagrant@node1:/vagrant$ ps -aef | grep maas
+## vagrant   9131  9056  0 12:20 pts/0    00:00:00 grep --color=auto maas
+## vagrant@node1:/vagrant$ ip a s | grep 192.168
+##     inet 192.168.50.101/24 brd 192.168.50.255 scope global enp0s8
+## vagrant@node1:/vagrant$ ip a s | grep 192.168 | awk '{print $7}'
+## enp0s8
+    - name: get private_netwokr NIC name
+      shell: "ip a s | grep 192.168.50 | awk '{print $7}'"
+      register: private_nic
+
     - name: enlist node into maas
-      command: maas-enlist --serverurl 192.168.50.100 --interface eth1
+      command: maas-enlist --serverurl 192.168.50.100 --interface {{ private_nic.stdout }}

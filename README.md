@@ -1,4 +1,9 @@
-# vagrant-maas-in-a-box
+# vagrant-os-ironic-in-a-box
+
+Original is MAAS in a box.
+
+change MAAS deploy to Ironic all-in-one (openstack-ansible install)
+
 
 ### MAAS in a box, with a fox, eating his socks.
 

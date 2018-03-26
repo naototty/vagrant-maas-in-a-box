@@ -1,14 +1,8 @@
 ---
-- hosts: os-ironic
+- hosts: maas
   user: vagrant
   sudo: True
   tasks:
-## for centos7 image
-#    - name: yum Install base packages and other usefulness
-#      yum: pkg={{item}} state=installed update_cache=yes
-#      with_items:
-#        - epel-release
-#        - centos-release-openstack-newton
     - name: Install base packages and other usefulness
       action: apt pkg={{item}} state=installed update_cache=yes
       with_items:
@@ -40,5 +34,11 @@
         chdir: /opt/openstack-ansible/
     - name: rename .yml.aio to .yml config
       shell: "for f in $(ls -1 /etc/openstack_deploy/conf.d/*.aio); do mv -v ${f} ${f%.*}; done"
+## for centos7 image
+#    - name: yum Install base packages and other usefulness
+#      yum: pkg={{item}} state=installed update_cache=yes
+#      with_items:
+#        - epel-release
+#        - centos-release-openstack-newton
       
 
